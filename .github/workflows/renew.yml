@@ -1,8 +1,8 @@
-name: Auto Renew Bot-hosting 1
+name: Auto Renew Bot-hosting
 
 on:
   schedule:
-    - cron: '0 0 * * *' # 每天UTC 00点 (北京时间8点, 一般都会推迟),自行根据服务到期时间调整
+    - cron: '0 */6 * * *'   # 每6小时执行一次（UTC 0、6、12、18点）
   workflow_dispatch:
 
 jobs:
