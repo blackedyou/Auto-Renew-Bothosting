@@ -1,4 +1,4 @@
-name: Auto Renew Bot-hosting2
+name: Auto Renew Bot-hosting 2
 
 on:
   schedule:
@@ -54,17 +54,34 @@ jobs:
           pkill -f Xvfb || true
           rm -f sing-box sing-box-config.json sing-box.log
 
-      - name: 🧹 清理旧的工作流运行记录
+      - name: 🧹 清理旧的工作流运行记录（仅删除失败的，保留所有成功）
         if: always()
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          runs=$(gh run list --workflow=renew2.yml --limit=100 --json databaseId --jq '.[].databaseId')
-          count=0
-          for run_id in $runs; do
-            count=$((count + 1))
-            if [ $count -gt 1 ]; then
-              echo "删除运行记录: $run_id"
-              gh run delete $run_id || true
+          echo "开始清理失败的工作流运行记录..."
+          # 获取所有运行记录（包含 status 和 conclusion）
+          runs=$(gh run list --workflow=renew2.yml --limit=100 --json databaseId,conclusion,status --jq '.[] | "\(.databaseId) \(.conclusion) \(.status)"')
+          
+          deleted=0
+          kept=0
+          
+          while read -r run_id conclusion status; do
+            # 跳过正在运行的
+            if [ "$status" = "in_progress" ] || [ "$status" = "queued" ]; then
+              echo "跳过进行中的运行: $run_id"
+              continue
             fi
-          done
+            
+            # 只保留成功的（conclusion == success），其他全部删除
+            if [ "$conclusion" = "success" ]; then
+              echo "✅ 保留成功的运行: $run_id"
+              kept=$((kept + 1))
+            else
+              echo "🗑️ 删除失败/取消的运行: $run_id (conclusion=$conclusion)"
+              gh run delete "$run_id" || true
+              deleted=$((deleted + 1))
+            fi
+          done <<< "$runs"
+          
+          echo "清理完成：保留成功 $kept 个，删除失败 $deleted 个"
