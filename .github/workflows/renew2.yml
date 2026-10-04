@@ -54,34 +54,39 @@ jobs:
           pkill -f Xvfb || true
           rm -f sing-box sing-box-config.json sing-box.log
 
-      - name: 🧹 清理旧的工作流运行记录（仅删除失败的，保留所有成功）
+      - name: 🧹 清理旧的工作流运行记录（保留所有成功 + 最近一次失败）
         if: always()
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          echo "开始清理失败的工作流运行记录..."
-          # 获取所有运行记录（包含 status 和 conclusion）
+          echo "开始清理工作流运行记录..."
           runs=$(gh run list --workflow=renew2.yml --limit=100 --json databaseId,conclusion,status --jq '.[] | "\(.databaseId) \(.conclusion) \(.status)"')
           
+          kept_success=0
+          kept_failed=0
           deleted=0
-          kept=0
+          has_kept_failed=false
           
           while read -r run_id conclusion status; do
-            # 跳过正在运行的
             if [ "$status" = "in_progress" ] || [ "$status" = "queued" ]; then
               echo "跳过进行中的运行: $run_id"
               continue
             fi
             
-            # 只保留成功的（conclusion == success），其他全部删除
             if [ "$conclusion" = "success" ]; then
               echo "✅ 保留成功的运行: $run_id"
-              kept=$((kept + 1))
+              kept_success=$((kept_success + 1))
             else
-              echo "🗑️ 删除失败/取消的运行: $run_id (conclusion=$conclusion)"
-              gh run delete "$run_id" || true
-              deleted=$((deleted + 1))
+              if [ "$has_kept_failed" = false ]; then
+                echo "⚠️ 保留最近一次失败的运行: $run_id (conclusion=$conclusion)"
+                kept_failed=$((kept_failed + 1))
+                has_kept_failed=true
+              else
+                echo "🗑️ 删除旧的失败运行: $run_id (conclusion=$conclusion)"
+                gh run delete "$run_id" || true
+                deleted=$((deleted + 1))
+              fi
             fi
           done <<< "$runs"
           
-          echo "清理完成：保留成功 $kept 个，删除失败 $deleted 个"
+          echo "清理完成：保留成功 $kept_success 个，保留最近失败 $kept_failed 个，删除旧失败 $deleted 个"
