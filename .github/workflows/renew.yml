@@ -2,7 +2,7 @@ name: Auto Renew Bot-hosting
 
 on:
   schedule:
-    - cron: '0 */6 * * *'   # 每6小时执行一次（UTC 0、6、12、18点）
+    - cron: '30 */24 * * *'   # 每 24 小时的第 30 分钟执行一次
   workflow_dispatch:
 
 jobs:
